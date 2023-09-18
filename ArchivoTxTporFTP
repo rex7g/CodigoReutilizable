@@ -1,0 +1,116 @@
+Enviar un archivo txt por FTP
+
+using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Configuration;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using WinSCP;
+
+namespace SalesLayer_File_Uploader.Services
+{
+
+    public class FtpSettings
+    {
+        public string IpAddress { get; set; }
+        public string username { get; set; }
+        public string RemotePath { get; set; }
+        public string FingerPrint { get; set; }
+        public string KeyPath { get; set; }
+
+    }
+    internal class FtpSender
+    {
+        
+        private readonly ILogger _logger;
+        private readonly SessionOptions _sessionOptions;
+        private readonly string _ipAddress;
+        private readonly string _username;
+        private readonly string _password;
+        private readonly string _remotePath;
+        private readonly string _fingerPrint;
+        private readonly string _keyPath;
+
+        public FtpSender(string SettingsKey)
+        {
+            _logger = Log.ForContext<FtpSender>();
+
+            try
+            {
+                NameValueCollection config = (NameValueCollection)ConfigurationManager.GetSection(SettingsKey);
+
+                _ipAddress = config["IpAddress"];
+                _username = config["UserName"];
+                _password = config["Password"];
+                _fingerPrint = config["FingerPrint"];
+                _keyPath = config["KeyPath"];
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+
+
+            _sessionOptions = new SessionOptions
+            {
+                Protocol = Protocol.Sftp,
+                HostName = _ipAddress,
+                UserName = _username,
+                Password = _password,
+                SshHostKeyFingerprint = _fingerPrint,
+                SshPrivateKeyPath = _keyPath
+            };
+
+          
+        }
+
+        public bool SendFile(string originalPath, string remotePath)
+        {
+
+            bool result;
+            using (var session = new Session())
+            {
+                result = false;
+               
+                session.Open(_sessionOptions);
+
+                if (!File.Exists(originalPath)) throw new FileNotFoundException("El archivo no existe", originalPath);
+
+                try
+                {
+                    
+                    _logger.Information("-->Subiendo el archivo {path} a la ruta {remotePath}...", originalPath, remotePath);
+
+                    session.PutFiles(originalPath, remotePath).Check();
+
+                    result = true;
+                    _logger.Information("Se subió el archivo {path} a la ruta {remotePath}", originalPath, remotePath);
+                }
+                catch (Exception ex )
+                {
+                    _logger.Error(ex, "Error tratando de enviar archivo {originalPath} por Ftp",originalPath);
+                    throw ex;
+
+                }
+                return result;
+            }
+        }
+        
+      
+    }
+}
+
+
+Archivo de appSettings:
+<appSettings>
+	<add key="IpAddress" value="IP:52.37.223.26" />
+	<add key="UserName" value="sftp-user" />
+	<add key="Password" value="fIAN0L8lCBH8dgpx" />
+  <add key="FingerPrint" value="ssh-ed25519 255 69:78:e0:d6:47:b6:e4:86:f8:9c:ad:3d:2c:d4:3f:cf" />
+	<add key="Ruta" value="/sftp/export/SAP-Files/Centro-101/Ruta" />
+</appSettings>

@@ -1,0 +1,168 @@
+Como guardar imagenes en sqlserver
+
+1-Se crea un modelo o mas bien se extrae la tabla desde sql server
+
+  public partial class Imagene
+  {
+      public int Id { get; set; }
+      public string? Requerimiento { get; set; }
+      public byte[]? Imagen { get; set; }
+      public string? Posicion { get; set; }
+  }
+2- metodo para GuardarImagen en sql server
+
+     public async Task<IActionResult> GuardarImagen(string id, string posicion)
+     {
+         //id es el requerimiento
+         if (string.IsNullOrEmpty(id)){return Json(new { success = false });}
+
+         if (Request.Form.Files.Count > 0)
+         {
+             var files = Request.Form.Files;
+             foreach (var file in files)
+             {
+                 try
+                 {
+                     if (file != null && file.Length > 0)
+                     {
+                         using (var memoryStream = new MemoryStream())
+                         {
+                             await file.CopyToAsync(memoryStream);
+                             byte[] imageData = memoryStream.ToArray();
+                             var base64String = Convert.ToBase64String(imageData);
+                             //verifica si es la misma imagen para no cargarla 2 veces a la DB 
+                             bool isSameImage = VerificarImagenExistente(id, posicion, imageData);
+                             if (isSameImage)
+                             {
+                                 // La imagen es la misma, no es necesario guardarla ni actualizarla
+                                 return Json(new { success = false, showMessage = true, message = "La imagen seleccionada ya ha sido guardada. Por favor, elige otra imagen" });
+                             }
+                             var newImgItem = new Imagene
+                             {
+                                 Imagen = imageData,
+                                 Requerimiento = id,
+                                 Posicion = posicion
+                             };
+                             _context.Imagenes.Add(newImgItem);
+                             await _context.SaveChangesAsync();
+                             var img = ObtenerImagen(id, posicion);
+                         }
+                     }
+                 }
+                 catch (Exception e)
+                 {
+                     return Json(new { success = false });
+                 }
+             }
+         }
+         return Json(new { success = true });
+3- metodo para obtener una imagen de la base de datos por el ID
+ [HttpGet]
+ public async Task<IActionResult> ObtenerImagen(string id, string posicion)
+ {
+     if (!string.IsNullOrEmpty(id))
+     {
+         var img = _context.Imagenes.FirstOrDefault(i => i.Requerimiento == id && i.Posicion == posicion);
+         string base64Image = Convert.ToBase64String(img.Imagen);
+         string imageSrc = $"data:image/png;base64,{base64Image}";
+         ViewData["Base64Image"] = base64Image;
+         return Json(new { success = true });
+     }
+     else
+     {
+         return Json(new { success = false });
+     }
+ }
+
+4-Funcionde js para guardar la imagen:
+
+ document.querySelectorAll('.save-image').forEach(el => el.addEventListener('click', function (event) {
+     event.preventDefault();
+     let parentElement = event.target.parentNode.parentNode;
+     let requerimientoValue = event.target.getAttribute("data-requerimiento");
+     let posicionValue = event.target.getAttribute("data-posicion");
+     console.log(posicionValue);
+
+     var fileInput = parentElement.querySelector('input[type="file"]');
+
+     console.log(requerimientoValue);
+     guardarImagen(fileInput, requerimientoValue, posicionValue)
+ }));
+ function guardarImagen(fileInput, requerimientoValue, posicionValue) {
+     var files = fileInput.files;
+     if (files.length > 0) {
+         var formData = new FormData();
+         formData.append('file', files[0]);
+         formData.append('data', JSON.stringify({
+             items: [{}]
+         }));
+         fetch(`/Pendiente/GuardarImagen?id=${requerimientoValue}&posicion=${posicionValue}`,
+             {
+                 method: 'POST',
+                 body: formData
+             })
+             .then(response => {
+                 if (response.ok) {
+                     return response.json();
+                 }
+                 throw new Error('Error al enviar la imagen.');
+             })
+             .then(data => {
+                 Swal.fire({
+                     icon: 'success',
+                     title: 'La Imagen ha sido Guardada correctamente',
+                     showConfirmButton: false,
+                     timer: 1500
+                 })
+                 location.reload();
+             })
+             .catch(error => {
+                 Swal.fire({
+                     icon: 'error',
+                     title: 'warning',
+                     text: 'Ya has guardado esta imagen. Por favor, selecciona otra.',
+                 })
+            });
+     }
+ }
+
+5- FUNCION DE JS PARA OBTENER LA IMAGEN
+
+function obtenerImagen(requerimientoValue,posicionValue) {
+     debugger;
+      console.log(requerimientoValue);
+      var obtenerImagen = document.getElementById('btnImagen');
+      console.log(obtenerImagen);
+      fetch('/Pendiente/ObtenerImagen?id=${requerimientoValue}&posicion=${posicionValue}')
+      
+          .then(response => {
+              if (response.ok) {
+                  return response.blob();
+              } else {
+                  Swal.fire({
+                      icon: 'error',
+                      title: 'Alerta...',
+                      text: 'No se ha podido obtener la Imagen',
+
+                  })
+              }
+          })
+          .then(blob => {
+              // Crear una URL para la imagen blob
+              const imgUrl = URL.createObjectURL(blob);
+
+              // Hacer algo con la URL de la imagen, por ejemplo, mostrarla en una etiqueta de imagen
+              const imgElement = document.getElementById('imagen');
+              imgElement.src = imgUrl;
+          })
+          .catch(error => {
+              // Manejar el error en caso de fallo en la solicitud
+              console.error(error);
+          });
+  }
+
+
+
+
+
+

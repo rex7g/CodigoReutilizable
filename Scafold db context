@@ -1,0 +1,7 @@
+Scafolding de la base de datos
+
+Esquema  de como hacer un SCAFFOLD DB CONTEXT
+Scaffold-DbContext [-Connection] [-Provider] [-OutputDir] [-Context] [-Schemas>] [-Tables>] [-DataAnnotations] [-Force] [-Project] [-StartupProject] [<CommonParameters>]
+
+Comando en el package manager console(cambiar el conection string)
+PM> Scaffold-DbContext "Server=.\SQLExpress;Database=SchoolDB;Trusted_Connection=True;" Microsoft.EntityFrameworkCore.SqlServer -OutputDir Models
